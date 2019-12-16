@@ -127,6 +127,9 @@ def _computeDiff(a, b):
     return a - b
 
 def _displayPredictionsAndResults(results, actual):
+    totalScore = 0
+    baselineSum = 200
+    baselineDiff = 0
     for game in actual:
         gameId = game['gameId']
         resultGame = _findByGameId(results, gameId)
@@ -136,10 +139,12 @@ def _displayPredictionsAndResults(results, actual):
         actualDiff = _computeDiff(homeScore, awayScore)
         predictedSum = _getField(resultGame, 'predictedSum')
         predictedDiff = _getField(resultGame, 'predictedDiff')
+        totalScore -= single_game_error(predictedDiff, predictedSum, actualDiff, actualSum)
+        totalScore += single_game_error(baselineDiff, baselineSum, actualDiff, actualSum)
         print(f'Game {gameId}. Actual results: home {homeScore} - away {awayScore}. '
             f'Actual: sum {actualSum} - diff {actualDiff}. '
             f'Predicted results: sum {predictedSum} - predictedDiff {predictedDiff}')
-
+    print(f'Total score is {totalScore}, number of games is {len(actual)}, score per game is {totalScore/len(actual)}')
 
 def single_game_error(predictedDiff, predictedSum, actualDiff, actualSum):
     return abs(predictedDiff - actualDiff) + abs(predictedSum - actualSum)

@@ -154,20 +154,20 @@ def predict_scores(required_predictions, elo_dict, diff_model, sum_model):
     #print('Finished')
 
 
-def predict(required_predictions, data_loader, first_season=2019, last_season=2020):
+def predict(required_predictions, data_loader, first_season=2009, last_season=2020):
 
     print('Loading training data')
     train_data = get_multi_season_game_data(data_loader, first_season, last_season)
+    current_season = train_data['season'].iloc[-1]
+    train_data = train_data[train_data['season'] == current_season]
 
     print('Getting Elo ratings over time on train data')
     elo_dict = get_elos_over_time(train_data,
                                   starting_elo_dict={},
                                   K=10)
-    print(elo_dict)
 
     print('Fitting model')
     diff_model, sum_model = fit_scores(train_data)
     predict_scores(required_predictions, elo_dict, diff_model, sum_model)
-    print(required_predictions)
 
     return required_predictions
