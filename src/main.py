@@ -54,31 +54,37 @@ def get_multi_season_game_data(data_loader, first_year, last_year):
 
 
 ## Elo model's probability of home team winning
-def home_win_probability(home_elo, away_elo):
-    return 1 / (1 + math.pow(10, -(home_elo - away_elo) / 400))
+def home_win_probability(home_elo, away_elo,
+                         home_advantage = 100 # source: 538
+                        ):
+    return 1 / (1 + math.pow(10, -(home_advantage+home_elo - away_elo) / 400))
 
 
 ## Get new Elo ratings home and away teams after a game
 def get_updated_elo(
-        home_elo, away_elo,
-        home_victory,  ## 1 if home team won, 0 if away team won
-        K,  ## model hyperparameter
+    home_elo, away_elo,
+    point_diff, ## > 0 if home team wins, < 0 if away team wins, cannot be 0 (will throw error)
+    K,  ## model hyperparameter
 ):
-    if home_victory not in [0, 1, False, True]:
-        raise ValueError(f"home_victory should be 1 if home team won, 0 if away team won. Got {home_victory}")
 
     P_home_win = home_win_probability(home_elo, away_elo)
     P_away_win = 1 - P_home_win
 
     # When home team wins
-    if home_victory:
-        home_elo += K * P_away_win
-        away_elo -= K * P_home_win
+    if point_diff > 0 :
+        elo_diff = home_elo-away_elo
+        M = (point_diff+3)**0.8/(7.5+0.006*elo_diff)# multiplier, source 538
+        home_elo += M * K * P_away_win
+        away_elo -= M * K * P_home_win
 
     # When away team wins
-    else:
-        home_elo -= K * P_away_win
-        away_elo += K * P_home_win
+    elif point_diff < 0 :
+        elo_diff = away_elo-home_elo
+        M = (-point_diff+3)**0.8/(7.5+0.006*elo_diff)# multiplier, source 538
+        home_elo -= M * K * P_away_win
+        away_elo += M * K * P_home_win
+
+    else : raise ValueError(f"point_diff should be non-zero number. Got {point_diff}")
 
     return home_elo, away_elo
 
@@ -87,7 +93,7 @@ def get_updated_elo(
 def get_elos_over_time(data,  ## dataframe of games, must be in order of occurence
                        starting_elo_dict={},  ## dictionary of elo scores by team at the beginning of the data period
                        default_elo=0,  ## elo initally given to a team not in starting_elo_dict
-                       K=10,  ## model hyperparameter; higher number means individuals game affects Elo more
+                       K=20,  ## model hyperparameter; higher number means individuals game affects Elo more
                        ):
     elo_dict = starting_elo_dict.copy()
     data['homeElo'] = np.nan
@@ -105,40 +111,36 @@ def get_elos_over_time(data,  ## dataframe of games, must be in order of occuren
         data.loc[i, 'awayElo'] = away_elo
 
         ## Calculate the new elo scores and update elo_dict with them
-        home_victory = row['pointsDiff'] > 0
-        home_elo, away_elo = get_updated_elo(home_elo, away_elo, home_victory, K)
+        point_diff = row['pointsDiff']
+        home_elo, away_elo = get_updated_elo(home_elo, away_elo, point_diff, K)
         elo_dict[home_team] = home_elo
         elo_dict[away_team] = away_elo
 
     return elo_dict
 
-# Write some code
-def predict(required_predictions, data_loader, log=lambda x: print(x)):
-    first_year = 2008
-
-    log('Loading training data')
-    train_data = get_multi_season_game_data(data_loader, first_year=first_year, last_year=2020)
-
-    log('Getting Elo ratings over time on train data')
-    elo_dict = get_elos_over_time(train_data, starting_elo_dict={}, K=10)
+def fit_scores(train_data):
     train_data['EloDifference'] = train_data['homeElo'] - train_data['awayElo']
     train_data['EloSum'] = train_data['homeElo'] + train_data['awayElo']
 
-    log('Fitting linear model from Elo difference and sum to points difference')
+    #print('Fitting linear model from Elo difference and sum to points difference')
     X = train_data[['EloDifference', 'EloSum']]
     X = sm.add_constant(X)
     y = train_data['pointsDiff']
     diff_model = sm.OLS(y, X).fit()
 
-    log('Fitting linear model from Elo difference and sum to points sum')
+    #print('Fitting linear model from Elo difference and sum to points sum')
     y = train_data['pointsSum']
     sum_model = sm.OLS(y, X).fit()
 
-    log('Generating predictions')
+    return diff_model, sum_model
+
+def predict_scores(required_predictions, elo_dict, diff_model, sum_model):
+
+    #print('Generating predictions')
     #     required_predictions = pd.DataFrame(required_predictions)
     tmp = required_predictions[['homeTeam', 'awayTeam']].copy()
-    tmp['homeElo'] = [elo_dict[team] for team in tmp['homeTeam']]
-    tmp['awayElo'] = [elo_dict[team] for team in tmp['awayTeam']]
+    tmp['homeElo'] = [elo_dict.get(team,0) for team in tmp['homeTeam']]
+    tmp['awayElo'] = [elo_dict.get(team,0) for team in tmp['awayTeam']]
     tmp['EloDifference'] = tmp.eval('homeElo - awayElo')
     tmp['EloSum'] = tmp.eval('homeElo + awayElo')
     X = tmp[['EloDifference', 'EloSum']]
@@ -149,7 +151,23 @@ def predict(required_predictions, data_loader, log=lambda x: print(x)):
     required_predictions['predictedDiff'] = tmp['predictedDiff']
     required_predictions['predictedSum'] = tmp['predictedSum']
 
-    log('Finished')
+    #print('Finished')
 
-    #     return required_predictions.to_dict('records')
+
+def predict(required_predictions, data_loader, first_season=2020, last_season=2020):
+
+    print('Loading training data')
+    train_data = get_multi_season_game_data(data_loader, first_season, last_season)
+
+    print('Getting Elo ratings over time on train data')
+    elo_dict = get_elos_over_time(train_data,
+                                  starting_elo_dict={},
+                                  K=10)
+    print(elo_dict)
+
+    print('Fitting model')
+    diff_model, sum_model = fit_scores(train_data)
+    predict_scores(required_predictions, elo_dict, diff_model, sum_model)
+    print(required_predictions)
+
     return required_predictions
