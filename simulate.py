@@ -30,6 +30,7 @@ userpath = os.path.abspath(os.path.join(currdir, args.userpath))
 sys.path.append(userpath)
 
 def simulate():
+    print(args.cutoff)
     settings = libsimulation.SimulationSettings()
     settings.env = env
     settings.cutoff = args.cutoff
