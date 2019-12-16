@@ -154,7 +154,7 @@ def predict_scores(required_predictions, elo_dict, diff_model, sum_model):
     #print('Finished')
 
 
-def predict(required_predictions, data_loader, first_season=2020, last_season=2020):
+def predict(required_predictions, data_loader, first_season=2019, last_season=2020):
 
     print('Loading training data')
     train_data = get_multi_season_game_data(data_loader, first_season, last_season)
