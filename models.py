@@ -139,7 +139,7 @@ class ELO():
 
         if weeks == 'current_season':
             evolve_data = self.data[self.data['season'] == self.data['season'].max()]
-            self.ELO = get_elos_over_time(self.data,
+            self.ELO = get_elos_over_time(evolve_data,
                                           starting_elo_dict={},
                                           K=self.K, home_advantage=self.home_advantage, use_margin=self.use_margin)
 
