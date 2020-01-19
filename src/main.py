@@ -60,7 +60,7 @@ def predict(required_predictions, data_loader, first_season=2009, last_season=20
     first_monday = first_match_date - (first_match_date - 1) % 7
     train_data['week'] = train_data['dateTime'].dt.date.apply(lambda x: (x.toordinal() - first_monday)//7)
 
-    model = ELO(K=10, home_advantage=0, use_margin=False, lag=3, reset_after_season=True)
+    model = ELO(K=10, home_advantage=0, use_margin=False, lag=3, reset_after_season=True, family=sm.families.Poisson())
     model.add_data(train_data)
     model.evolve(weeks='current_season') #calculate ELO over all weeks available
     model.fit()
