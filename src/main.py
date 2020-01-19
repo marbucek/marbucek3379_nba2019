@@ -56,10 +56,11 @@ def predict(required_predictions, data_loader, first_season=2009, last_season=20
 
     print('Loading training data')
     train_data = get_multi_season_game_data(data_loader, first_season, last_season)
-    #
-    #train_data = train_data[train_data['season'] == current_season]
+    first_match_date = train_data.dateTime.dt.date.min().toordinal()
+    first_monday = first_match_date - (first_match_date - 1) % 7
+    train_data['week'] = train_data['dateTime'].dt.date.apply(lambda x: (x.toordinal() - first_monday)//7)
 
-    model = ELO(K=10, home_advantage=0, use_margin=False, lag=-1, reset_after_season=True)
+    model = ELO(K=10, home_advantage=0, use_margin=False, lag=3, reset_after_season=True)
     model.add_data(train_data)
     model.evolve(weeks='current_season') #calculate ELO over all weeks available
     model.fit()
@@ -69,7 +70,6 @@ def predict(required_predictions, data_loader, first_season=2009, last_season=20
     first_match_date = data_season.dateTime.dt.date.min().toordinal()
     first_monday = first_match_date - (first_match_date - 1) % 7
     data_season['week'] = train_data['dateTime'].dt.date.apply(lambda x: (x.toordinal() - first_monday)//7)
-    print(data_season['week'])
     print(f"Calculating predictions for season {current_season}, week {data_season['week'].max() + 1}")
     model.predict(required_predictions)
 
